@@ -2,7 +2,7 @@
 
 Mining accidents have historically been a significant concern in India, requiring effective safety measures and thorough analysis to prevent future incidents. MineSafeAI addresses this critical need by leveraging the power of Natural Language Processing (NLP) and agentic AI to digitize, analyze, and provide real-time insights from extensive collections of Indian mining accident records.
 
-Our platform is designed to transform how safety data is processed and utilized, moving beyond traditional methods to offer an intelligent, proactive approach to accident prevention and regulatory compliance. By analyzing over 143 incident records from DGMS India (2016-2025), MineSafeAI aims to enhance safety, reduce human labor in auditing, and provide deeper, more accurate insights into accident patterns and root causes.
+Our platform is designed to transform how safety data is processed and utilized, moving beyond traditional methods to offer an intelligent, proactive approach to accident prevention and regulatory compliance. By analyzing over 143 incident records from DGMS India (2015-2025), MineSafeAI aims to enhance safety, reduce human labor in auditing, and provide deeper, more accurate insights into accident patterns and root causes.
 
 ## 🌟 Features
 
