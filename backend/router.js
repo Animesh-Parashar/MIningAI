@@ -227,18 +227,149 @@ Answer:
 // --- Other Routes (No Change) ---
 
 // ✅ Report generation
-router.post('/reports', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: 'prompt required' });
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-    const result = await model.generateContent(prompt);
-    res.json({ ok: true, out: result.response.text() });
-  } catch (err) {
-    await logError('/api/reports', err);
-    res.status(500).json({ error: 'reports failed', details: err?.message });
-  }
-});
+// ✅ Yearly Gemini Safety Report Generator
+router
+  .route("/reports")
+
+  // 📥 GET all stored reports
+  .get(async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("reports")
+        .select("*")
+        .order("year", { ascending: false });
+
+      if (error) throw error;
+      res.json({ ok: true, reports: data || [] });
+    } catch (err) {
+      await logError("/api/reports-get", err);
+      res.status(500).json({ error: "Failed to fetch reports", details: err.message });
+    }
+  })
+
+  // 🧠 POST — Generate a Yearly Report
+  .post(async (req, res) => {
+    try {
+      // Get current year for filtering
+      const currentYear = new Date().getFullYear();
+
+      // Check if report already exists for the year
+      const { data: existing } = await supabase
+        .from("reports")
+        .select("*")
+        .eq("year", currentYear)
+        .maybeSingle();
+
+      if (existing) {
+        return res.json({
+          ok: true,
+          out: { summary: existing.content, report: existing },
+          cached: true,
+        });
+      }
+
+      // 1️⃣ Fetch all incidents
+      const { data: incidents, error } = await supabase.from("incidents").select("*");
+      if (error) throw error;
+
+      if (!incidents || incidents.length === 0)
+        return res.json({ ok: false, error: "No incident data found" });
+
+      // 2️⃣ Parse date (yy-mm-dd) safely and group by year
+      const byYear = {};
+      incidents.forEach((i) => {
+        if (!i.date) return;
+        const [yy, mm, dd] = i.date.split("-").map(Number);
+        const fullYear = yy < 50 ? 2000 + yy : 1900 + yy; // handle "25" as 2025 etc.
+
+        if (!byYear[fullYear]) {
+          byYear[fullYear] = {
+            total: 0,
+            casualties: 0,
+            injuries: 0,
+            states: {},
+            causes: {},
+            minerals: {},
+          };
+        }
+
+        const y = byYear[fullYear];
+        y.total++;
+        y.casualties += i.casualties || 0;
+        y.injuries += i.injured || 0;
+
+        if (i.state) y.states[i.state] = (y.states[i.state] || 0) + 1;
+        if (i.cause_label) y.causes[i.cause_label] = (y.causes[i.cause_label] || 0) + 1;
+        if (i.mineral) y.minerals[i.mineral] = (y.minerals[i.mineral] || 0) + 1;
+      });
+
+      // 3️⃣ Convert to Gemini summary input
+      const structuredSummary = Object.entries(byYear).map(([year, d]) => {
+        const top = (obj) =>
+          Object.entries(obj)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([k]) => k);
+
+        return {
+          year,
+          totalIncidents: d.total,
+          totalCasualties: d.casualties,
+          totalInjuries: d.injuries,
+          topStates: top(d.states),
+          topCauses: top(d.causes),
+          topMinerals: top(d.minerals),
+        };
+      });
+
+      // 4️⃣ Construct Gemini prompt
+      const prompt = `
+You are a senior Mining Safety Analyst.
+Generate a **Yearly Mining Safety Report** using real data provided below.
+
+DATA SUMMARY:
+${JSON.stringify(structuredSummary, null, 2)}
+
+Write a structured report with:
+- Total incidents, casualties, and injuries for each year.
+- Top causes, states, and minerals for that year.
+- Compare changes across years.
+- Identify the most improved and most vulnerable areas.
+- Give 3 actionable recommendations for next year.
+- End with a one-paragraph overall summary and prediction for next year.
+
+Keep it professional and data-driven.
+      `;
+
+      // 5️⃣ Gemini call
+      const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+
+      // 6️⃣ Store report in Supabase
+      const { data: inserted, error: insertError } = await supabase
+        .from("reports")
+        .insert([
+          {
+            report_name: `Yearly Safety Report - ${currentYear}`,
+            type: "yearly",
+            year: currentYear,
+            generated_at: new Date().toISOString(),
+            content: text,
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      res.json({ ok: true, out: { summary: text, report: inserted } });
+    } catch (err) {
+      await logError("/api/reports-post", err);
+      res.status(500).json({ error: "Yearly report generation failed", details: err.message });
+    }
+  });
+
 
 // ✅ Realtime analysis
 router.post('/realtime', async (req, res) => {
