@@ -231,7 +231,7 @@ All rights reserved © 2025 MineSafeAI.
 
 ## 📞 Contact
 **Authors**:  
-**Abhishek Kurmi**  
+**Abhishek Kurmi** [ML guy]  
 **Animesh Parashar**
 🔗 [GitHub Profile](https://github.com/Animesh-Parashar)
 📘 [Project Repository](https://github.com/Animesh-Parashar/MIningAI)
